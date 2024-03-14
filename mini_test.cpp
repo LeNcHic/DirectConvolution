@@ -4,7 +4,7 @@
 #include <iostream>
 #include <Eigen/Core>
 #include <iomanip>
-//#include "directConvolution.cpp"
+#include "direct_convolution.h"
 
 typedef float real32_t;
 
@@ -237,215 +237,6 @@ void aa_convolution(
   }
 }
 
-void direct_convolution() {
-
-}
-
-
-void loop_order_n1(
-  real32_t *result,
-  const real32_t *image, const real32_t *kernel,
-  int input_height, int input_width, int input_channels,
-  int stride_height, int stride_width, int output_channels,
-  int kernel_height, int kernel_width) {
-
-  const int out_height = (input_height - kernel_height + stride_height) / stride_height;
-  const int out_width = (input_width - kernel_width + stride_width) / stride_width;
-
-  for (int l = 0; l < out_height; ++l) {
-    for (int n = 0; n < kernel_height; ++n) {
-      for (int m = 0; m < kernel_width; ++m) {
-        for (int i = 0; i < input_channels; ++i) {
-          for (int k = 0; k < out_width; ++k) {
-            for (int j = 0; j < output_channels; ++j) {
-              result[l * out_width * output_channels + k * output_channels + j] +=
-                kernel[n * (kernel_width * input_channels * output_channels) + m * (input_channels * output_channels) +
-                       i * output_channels + j] *
-                image[(n * stride_height + l) * input_width * input_channels + (m * stride_width + k) * input_channels +
-                      i];
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-
-void loop_order_n2(
-  real32_t *result,
-  const real32_t *image, const real32_t *kernel,
-  int input_height, int input_width, int input_channels,
-  int stride_height, int stride_width, int output_channels,
-  int kernel_height, int kernel_width) {
-
-  const int out_height = (input_height - kernel_height + stride_height) / stride_height;
-  const int out_width = (input_width - kernel_width + stride_width) / stride_width;
-
-  for (int n = 0; n < kernel_height; ++n) {
-    for (int m = 0; m < kernel_width; ++m) {
-      for (int i = 0; i < input_channels; ++i) {
-        for (int l = 0; l < out_height; ++l) {
-          for (int k = 0; k < out_width; ++k) {
-            for (int j = 0; j < output_channels; ++j) {
-              result[l * out_width * output_channels + k * output_channels + j] +=
-                kernel[n * (kernel_width * input_channels * output_channels) + m * (input_channels * output_channels) +
-                       i * output_channels + j] *
-                image[(n * stride_height + l) * input_width * input_channels + (m * stride_width + k) * input_channels + i];
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-
-void loop_order_n3(
-  real32_t *result,
-  const real32_t *image, const real32_t *kernel,
-  int input_height, int input_width, int input_channels,
-  int stride_height, int stride_width, int output_channels,
-  int kernel_height, int kernel_width) {
-
-  const int out_height = (input_height - kernel_height + stride_height) / stride_height;
-  const int out_width = (input_width - kernel_width + stride_width) / stride_width;
-
-  for (int l = 0; l < out_height; ++l) {
-    for (int n = 0; n < kernel_height; ++n) {
-      for (int m = 0; m < kernel_width; ++m) {
-        for (int k = 0; k < out_width; ++k) {
-          for (int i = 0; i < input_channels; ++i) {
-            for (int j = 0; j < output_channels; ++j) {
-              result[l * out_width * output_channels + k * output_channels + j] +=
-                kernel[n * (kernel_width * input_channels * output_channels) + m * (input_channels * output_channels) +
-                       i * output_channels + j] *
-                image[(n * stride_height + l) * input_width * input_channels + (m * stride_width + k) * input_channels +
-                      i];
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-void loop_order_n1_tiled(
-  real32_t *result,
-  const real32_t *image, const real32_t *kernel,
-  int input_height, int input_width, int input_channels,
-  int stride_height, int stride_width, int output_channels,
-  int kernel_height, int kernel_width, int tile_size) {
-
-  const int out_height = (input_height - kernel_height + stride_height) / stride_height;
-  const int out_width = (input_width - kernel_width + stride_width) / stride_width;
-
-  for (int l = 0; l < out_height; l += tile_size) {
-    for (int n = 0; n < kernel_height; n += tile_size) {
-      for (int m = 0; m < kernel_width; m += tile_size) {
-        for (int i = 0; i < input_channels; ++i) {
-          for (int k = 0; k < out_width; k += tile_size) {
-            for (int j = 0; j < output_channels; ++j) {
-              //Tiling loops
-              for (int lt = 0; lt < tile_size && (l + lt) < out_height; ++lt) {
-                for (int nt = 0; nt < tile_size && (n + nt) < kernel_height; ++nt) {
-                  for (int mt = 0; mt < tile_size && (m + mt) < kernel_width; ++mt) {
-                    for (int kt = 0; kt < tile_size && (k + kt) < out_width; ++kt) {
-                      result[(l + lt) * out_width * output_channels + (k + kt) * output_channels + j] +=
-                        kernel[(n + nt) * (kernel_width * input_channels * output_channels) +
-                               (m + mt) * (input_channels * output_channels) + i * output_channels + j] *
-                        image[((n + nt) * stride_height + (l + lt)) * input_width * input_channels +
-                              ((m + mt) * stride_width + (k + kt)) * input_channels + i];
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-
-void loop_order_n2_tiled(
-  real32_t *result,
-  const real32_t *image, const real32_t *kernel,
-  int input_height, int input_width, int input_channels,
-  int stride_height, int stride_width, int output_channels,
-  int kernel_height, int kernel_width, int tile_size) {
-
-  const int out_height = (input_height - kernel_height + stride_height) / stride_height;
-  const int out_width = (input_width - kernel_width + stride_width) / stride_width;
-
-  for (int n = 0; n < kernel_height; n += tile_size) {
-    for (int m = 0; m < kernel_width; m += tile_size) {
-      for (int i = 0; i < input_channels; ++i) {
-        for (int l = 0; l < out_height; l += tile_size) {
-          for (int k = 0; k < out_width; k += tile_size) {
-            for (int j = 0; j < output_channels; ++j) {
-              //Tiling loops
-              for (int nt = 0; nt < tile_size && (n + nt) < kernel_height; ++nt) {
-                for (int mt = 0; mt < tile_size && (m + mt) < kernel_width; ++mt) {
-                  for (int lt = 0; lt < tile_size && (l + lt) < out_height; ++lt) {
-                    for (int kt = 0; kt < tile_size && (k + kt) < out_width; ++kt) {
-                      result[(l + lt) * out_width * output_channels + (k + kt) * output_channels + j] +=
-                        kernel[(n + nt) * (kernel_width * input_channels * output_channels) +
-                               (m + mt) * (input_channels * output_channels) + i * output_channels + j] *
-                        image[((n + nt) * stride_height + (l + lt)) * input_width * input_channels +
-                              ((m + mt) * stride_width + (k + kt)) * input_channels + i];
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-
-void loop_order_n3_tiled(
-  real32_t *result,
-  const real32_t *image, const real32_t *kernel,
-  int input_height, int input_width, int input_channels,
-  int stride_height, int stride_width, int output_channels,
-  int kernel_height, int kernel_width, int tile_size) {
-
-  const int out_height = (input_height - kernel_height + stride_height) / stride_height;
-  const int out_width = (input_width - kernel_width + stride_width) / stride_width;
-
-  for (int l = 0; l < out_height; l += tile_size) {
-    for (int n = 0; n < kernel_height; n += tile_size) {
-      for (int m = 0; m < kernel_width; m += tile_size) {
-        for (int k = 0; k < out_width; k += tile_size) {
-          for (int i = 0; i < input_channels; ++i) {
-            for (int j = 0; j < output_channels; ++j) {
-              //Tiling loops
-              for (int lt = 0; lt < tile_size && (l + lt) < out_height; ++lt) {
-                for (int nt = 0; nt < tile_size && (n + nt) < kernel_height; ++nt) {
-                  for (int mt = 0; mt < tile_size && (m + mt) < kernel_width; ++mt) {
-                    for (int kt = 0; kt < tile_size && (k + kt) < out_width; ++kt) {
-                      result[(l + lt) * out_width * output_channels + (k + kt) * output_channels + j] +=
-                        kernel[(n + nt) * (kernel_width * input_channels * output_channels) +
-                               (m + mt) * (input_channels * output_channels) + i * output_channels + j] *
-                        image[((n + nt) * stride_height + (l + lt)) * input_width * input_channels +
-                              ((m + mt) * stride_width + (k + kt)) * input_channels + i];
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
 
 enum ConvType {
     CONV_TYPE_NONE = 0,
@@ -458,6 +249,14 @@ enum ConvType {
     CONV_TYPE_TILING_LOOP1 = 7,
     CONV_TYPE_TILING_LOOP2 = 8,
     CONV_TYPE_TILING_LOOP3 = 9,
+    CONV_TYPE_LOOP1_SIMD = 10,
+    CONV_TYPE_LOOP2_SIMD = 11,
+    CONV_TYPE_LOOP3_SIMD = 12,
+    CONV_TYPE_TILING_LOOP1_SIMD = 13,
+    CONV_TYPE_TILING_LOOP2_SIMD = 14,
+    CONV_TYPE_TILING_LOOP3_SIMD = 15,
+
+
 
 
 };
@@ -509,6 +308,7 @@ struct ConvWrapper {
     void init();
 
     void run() {
+      int tile_size = 32;
       switch (ct) {
         case CONV_TYPE_NONE:
           break;
@@ -546,18 +346,54 @@ struct ConvWrapper {
         case CONV_TYPE_TILING_LOOP1:
           loop_order_n1_tiled(result.data(), input_image.data(), matrix.data(),
                               in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
-                              filter_size.height, filter_size.width, 128);
+                              filter_size.height, filter_size.width, tile_size);
           break;
         case CONV_TYPE_TILING_LOOP2:
           loop_order_n2_tiled(result.data(), input_image.data(), matrix.data(),
                               in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
-                              filter_size.height, filter_size.width, 128);
+                              filter_size.height, filter_size.width, tile_size);
           break;
         case CONV_TYPE_TILING_LOOP3:
           loop_order_n3_tiled(result.data(), input_image.data(), matrix.data(),
                               in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
-                              filter_size.height, filter_size.width, 128);
+                              filter_size.height, filter_size.width, tile_size);
+          break;
 
+        case CONV_TYPE_LOOP1_SIMD:
+          loop_order_n1_with_simd(result.data(), input_image.data(), matrix.data(),
+                        in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
+                        filter_size.height, filter_size.width);
+          break;
+
+        case CONV_TYPE_LOOP2_SIMD:
+          loop_order_n2_with_simd(result.data(), input_image.data(), matrix.data(),
+                        in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
+                        filter_size.height, filter_size.width);
+          break;
+
+        case CONV_TYPE_LOOP3_SIMD:
+          loop_order_n3_with_simd(result.data(), input_image.data(), matrix.data(),
+                        in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
+                        filter_size.height, filter_size.width);
+          break;
+
+        case CONV_TYPE_TILING_LOOP1_SIMD:
+          loop_order_n1_tiled_with_simd(result.data(), input_image.data(), matrix.data(),
+                        in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
+                        filter_size.height, filter_size.width, tile_size);
+          break;
+
+        case CONV_TYPE_TILING_LOOP2_SIMD:
+          loop_order_n2_tiled_with_simd(result.data(), input_image.data(), matrix.data(),
+                        in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
+                        filter_size.height, filter_size.width, tile_size);
+          break;
+
+        case CONV_TYPE_TILING_LOOP3_SIMD:
+          loop_order_n3_tiled_with_simd(result.data(), input_image.data(), matrix.data(),
+                        in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
+                        filter_size.height, filter_size.width, tile_size);
+          break;
       }
     }
 
@@ -664,6 +500,15 @@ MUSTINLINE void report(const ConvWrapper &cw, double time, double error, double 
     case CONV_TYPE_LOOP3:
       std::cout << "\tloop_order_3\t";
       break;
+    case CONV_TYPE_LOOP1_SIMD:
+      std::cout << "\tloop_order_1_simd\t";
+      break;
+    case CONV_TYPE_LOOP2_SIMD:
+      std::cout << "\tloop_order_2_simd\t";
+      break;
+    case CONV_TYPE_LOOP3_SIMD:
+      std::cout << "\tloop_order_3_simd\t";
+      break;
     case CONV_TYPE_TILING_LOOP1:
       std::cout << "\ttiling_loop_order_1\t";
       break;
@@ -672,6 +517,15 @@ MUSTINLINE void report(const ConvWrapper &cw, double time, double error, double 
       break;
     case CONV_TYPE_TILING_LOOP3:
       std::cout << "\ttiling_loop_order_3\t";
+      break;
+    case CONV_TYPE_TILING_LOOP1_SIMD:
+      std::cout << "\ttiling_loop_order_1_simd\t";
+      break;
+    case CONV_TYPE_TILING_LOOP2_SIMD:
+      std::cout << "\ttiling_loop_order_2_simd\t";
+      break;
+    case CONV_TYPE_TILING_LOOP3_SIMD:
+      std::cout << "\ttiling_loop_order_3_simd\t";
       break;
     default:
       std::cout << "unknown_type:\t\t";
@@ -709,6 +563,12 @@ void run_time_test_f32(int cycles) {
             ConvWrapper tiling_loop1 = a;
             ConvWrapper tiling_loop2 = a;
             ConvWrapper tiling_loop3 = a;
+            ConvWrapper loop1_simd = a;
+            ConvWrapper loop2_simd = a;
+            ConvWrapper loop3_simd = a;
+            ConvWrapper tl1_simd = a;
+            ConvWrapper tl2_simd = a;
+            ConvWrapper tl3_simd = a;
             c.ct = CONV_TYPE_ANDERSON_F32;
             b.ct = CONV_TYPE_IM2COL_PARTED_F32;
             loop1.ct = CONV_TYPE_LOOP1;
@@ -717,6 +577,12 @@ void run_time_test_f32(int cycles) {
             tiling_loop1.ct = CONV_TYPE_TILING_LOOP1;
             tiling_loop2.ct = CONV_TYPE_TILING_LOOP2;
             tiling_loop3.ct = CONV_TYPE_TILING_LOOP3;
+            loop1_simd.ct = CONV_TYPE_LOOP1_SIMD;
+            loop2_simd.ct = CONV_TYPE_LOOP2_SIMD;
+            loop3_simd.ct = CONV_TYPE_LOOP3_SIMD;
+            tl1_simd.ct = CONV_TYPE_TILING_LOOP1_SIMD;
+            tl2_simd.ct = CONV_TYPE_TILING_LOOP2_SIMD;
+            tl3_simd.ct = CONV_TYPE_TILING_LOOP3_SIMD;
 
 
             loop1.measure(time, error, total_time, n_runs, one_test_time * 5);
@@ -728,6 +594,15 @@ void run_time_test_f32(int cycles) {
             loop3.measure(time, error, total_time, n_runs, one_test_time * 5);
             report(loop3, time, error, total_time, n_runs);
 
+            loop1_simd.measure(time, error, total_time, n_runs, one_test_time * 5);
+            report(loop1_simd, time, error, total_time, n_runs);
+
+            loop2_simd.measure(time, error, total_time, n_runs, one_test_time * 5);
+            report(loop2_simd, time, error, total_time, n_runs);
+
+            loop3_simd.measure(time, error, total_time, n_runs, one_test_time * 5);
+            report(loop3_simd, time, error, total_time, n_runs);
+
             tiling_loop1.measure(time, error, total_time, n_runs, one_test_time * 5);
             report(tiling_loop1, time, error, total_time, n_runs);
 
@@ -736,6 +611,15 @@ void run_time_test_f32(int cycles) {
 
             tiling_loop3.measure(time, error, total_time, n_runs, one_test_time * 5);
             report(tiling_loop3, time, error, total_time, n_runs);
+
+            tl1_simd.measure(time, error, total_time, n_runs, one_test_time * 5);
+            report(tl1_simd, time, error, total_time, n_runs);
+
+            tl2_simd.measure(time, error, total_time, n_runs, one_test_time * 5);
+            report(tl2_simd, time, error, total_time, n_runs);
+
+            tl3_simd.measure(time, error, total_time, n_runs, one_test_time * 5);
+            report(tl3_simd, time, error, total_time, n_runs);
 
             a.measure(time, error, total_time, n_runs, one_test_time * 5);
             report(a, time, error, total_time, n_runs);
@@ -746,7 +630,6 @@ void run_time_test_f32(int cycles) {
 //            const int out_height = (a.in_size.height - a.filter_size.height + a.stride.height) / a.stride.height;
 //            const int out_width = (a.in_size.width - a.filter_size.width + a.stride.width) / a.stride.width;
 //            check_correctness(a, c, a.out_channels, out_height, out_width);
-
 
             for (int p = 120; p < 121; p += 8) {
               b.parted_rows = p;
