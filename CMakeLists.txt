@@ -14,5 +14,5 @@ set(CMAKE_CXX_FLAGS "-Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -fsanitize=address")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
-add_executable(mini_test mini_test.cpp direct_convolution.cpp direct_convolution.h)
+add_executable(mini_test mini_test.cpp direct_convolution.cpp direct_convolution.h test/test_functions.cpp)
 target_link_libraries(mini_test Eigen3::Eigen)

@@ -5,6 +5,8 @@
 #include <Eigen/Core>
 #include <iomanip>
 #include "direct_convolution.h"
+#include "test/test_functions.h"
+#include "cmath"
 
 typedef float real32_t;
 
@@ -308,7 +310,7 @@ struct ConvWrapper {
     void init();
 
     void run() {
-      int tile_size = 32;
+      int tile_size = 4;
       switch (ct) {
         case CONV_TYPE_NONE:
           break;
@@ -435,22 +437,33 @@ struct ConvWrapper {
 };
 
 
-bool check_correctness(ConvWrapper im2col, ConvWrapper direct_convolution, int out_channels, int out_height, int out_width) {
-  bool flag = true;
-  for (int j = 0; j < out_channels; ++j) {
-    for (int k = 0; k < out_width; ++k) {
-      for (int l = 0; l < out_height; ++l) {
+void print_result(ConvWrapper a, int channels, int width, int height) {
+  for (int j = 0; j < channels; ++j) {
+    for (int k = 0; k < width; ++k) {
+      for (int l = 0; l < height; ++l) {
+        std::cout << a.result[l * width * channels + k * channels + j] << " ";
+      }
+      std::cout << std::endl;
+    }
+    std::cout << std::endl;
+  }
+  std::cout << std::endl;
+}
 
-        if (im2col.result[l * out_width * out_channels + k * out_channels + j] != direct_convolution.result[l * out_width * out_channels + k * out_channels + j]) {
-          flag = false;
-          std::cout << "im2: " << im2col.result[l * out_width * out_channels + k * out_channels + j] << "    ";
-          std::cout << "dc: " << direct_convolution.result[l * out_width * out_channels + k * out_channels + j] << std::endl;
+
+void print_kernel(ConvWrapper a) {
+  for (int j = 0; j < a.in_channels; ++j) {
+    for (int k = 0; k < a.filter_size.width; ++k) {
+      for (int l = 0; l <  a.filter_size.height; ++l) {
+        for (int i = 0; i < a.out_channels; ++i) {
+          std::cout << a.matrix[l * (a.filter_size.width *  a.in_channels * a.out_channels) + k * (a.in_channels * a.out_channels) + j * a.out_channels + i] << " ";
         }
       }
+      std::cout << std::endl;
     }
+    std::cout << std::endl;
   }
-  std::cout << flag;
-  return flag;
+  std::cout << std::endl;
 }
 
 void print_image(ConvWrapper a) {
@@ -459,10 +472,44 @@ void print_image(ConvWrapper a) {
       for (int l = 0; l < a.in_size.height; ++l) {
         std::cout << a.input_image[l * a.in_size.width * a.in_channels + k * a.in_channels + j] << " ";
       }
+      std::cout << std::endl;
     }
+    std::cout << std::endl;
   }
   std::cout << std::endl;
 }
+
+
+bool check_correctness(ConvWrapper a) {
+  a.set();
+  a.init();
+  const int out_channels = a.out_channels;
+  const int out_height = (a.in_size.height - a.filter_size.height + a.stride.height) / a.stride.height;
+  const int out_width = (a.in_size.width - a.filter_size.width + a.stride.width) / a.stride.width;
+  bool flag = true;
+  ConvWrapper b = a;
+  b.ct = CONV_TYPE_LOOP1_SIMD;
+//  print_image(a);
+//  print_image(b);
+//  print_kernel(a);
+//  print_kernel(b);
+  a.run();
+  b.run();
+  for (int j = 0; j < out_channels; ++j) {
+    for (int k = 0; k < out_width; ++k) {
+      for (int l = 0; l < out_height; ++l) {
+        if (std::abs(a.result[l * out_width * out_channels + k * out_channels + j] - b.result[l * out_width * out_channels + k * out_channels + j]) > 1) {
+          flag = false;
+        }
+      }
+    }
+  }
+//  print_result(a, out_channels, out_width, out_height);
+//  print_result(b, out_channels, out_width, out_height);
+  return flag;
+}
+
+
 
 // заполняем случайными значенияси изображение и матрицу
 void ConvWrapper::init() {
@@ -543,8 +590,8 @@ void run_time_test_f32(int cycles) {
 
   for (int c = 0; c < cycles; ++c) {
     for (int kernel_size: {3, 5}) {
-      for (int size: {50, 70, 85, 100}) {
-        for (int in_channels: {8, 16}) {
+      for (int size: {50, 70, 100, 20}) {
+        for (int in_channels: {4, 8}) {
           for (int out_channels: {8, 16}) {
             std::cout << "TESTING convolution of " << size << "x" << size << "x" << in_channels << " image with "
                       << kernel_size << "x" << kernel_size << "x" << in_channels << "x" << out_channels << " kernel"
@@ -627,9 +674,7 @@ void run_time_test_f32(int cycles) {
             c.measure(time, error, total_time, n_runs, one_test_time * 5);
             report(c, time, error, total_time, n_runs);
 
-//            const int out_height = (a.in_size.height - a.filter_size.height + a.stride.height) / a.stride.height;
-//            const int out_width = (a.in_size.width - a.filter_size.width + a.stride.width) / a.stride.width;
-//            check_correctness(a, c, a.out_channels, out_height, out_width);
+
 
             for (int p = 120; p < 121; p += 8) {
               b.parted_rows = p;
