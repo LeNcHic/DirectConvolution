@@ -257,11 +257,8 @@ enum ConvType {
     CONV_TYPE_TILING_LOOP1_SIMD = 13,
     CONV_TYPE_TILING_LOOP2_SIMD = 14,
     CONV_TYPE_TILING_LOOP3_SIMD = 15,
-
-
-
-
 };
+
 
 struct ConvWrapper {
     ConvType ct = CONV_TYPE_NONE;
@@ -310,7 +307,9 @@ struct ConvWrapper {
     void init();
 
     void run() {
-      int tile_size = 4;
+      int tile_size_input_channels = 8;
+      int tile_size_out_width = 20;
+      int tile_size_out_height = 20;
       switch (ct) {
         case CONV_TYPE_NONE:
           break;
@@ -348,17 +347,17 @@ struct ConvWrapper {
         case CONV_TYPE_TILING_LOOP1:
           loop_order_n1_tiled(result.data(), input_image.data(), matrix.data(),
                               in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
-                              filter_size.height, filter_size.width, tile_size);
+                              filter_size.height, filter_size.width, tile_size_input_channels, tile_size_out_width);
           break;
         case CONV_TYPE_TILING_LOOP2:
           loop_order_n2_tiled(result.data(), input_image.data(), matrix.data(),
                               in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
-                              filter_size.height, filter_size.width, tile_size);
+                              filter_size.height, filter_size.width, tile_size_out_width, tile_size_out_height);
           break;
         case CONV_TYPE_TILING_LOOP3:
           loop_order_n3_tiled(result.data(), input_image.data(), matrix.data(),
                               in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
-                              filter_size.height, filter_size.width, tile_size);
+                              filter_size.height, filter_size.width, tile_size_input_channels, tile_size_out_width);
           break;
 
         case CONV_TYPE_LOOP1_SIMD:
@@ -382,20 +381,33 @@ struct ConvWrapper {
         case CONV_TYPE_TILING_LOOP1_SIMD:
           loop_order_n1_tiled_with_simd(result.data(), input_image.data(), matrix.data(),
                         in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
-                        filter_size.height, filter_size.width, tile_size);
+                        filter_size.height, filter_size.width, tile_size_input_channels, tile_size_out_width);
           break;
 
         case CONV_TYPE_TILING_LOOP2_SIMD:
           loop_order_n2_tiled_with_simd(result.data(), input_image.data(), matrix.data(),
                         in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
-                        filter_size.height, filter_size.width, tile_size);
+                        filter_size.height, filter_size.width, tile_size_out_width, tile_size_out_height);
           break;
 
         case CONV_TYPE_TILING_LOOP3_SIMD:
           loop_order_n3_tiled_with_simd(result.data(), input_image.data(), matrix.data(),
                         in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
-                        filter_size.height, filter_size.width, tile_size);
+                        filter_size.height, filter_size.width, tile_size_input_channels, tile_size_out_width);
           break;
+      }
+    }
+
+
+    void result_zero() {
+      const int out_height = (this->in_size.height - this->filter_size.height + this->stride.height) / this->stride.height;
+      const int out_width = (this->in_size.width - this->filter_size.width + this->stride.width) / this->stride.width;
+      for (int j = 0; j < out_channels; ++j) {
+        for (int k = 0; k < out_width; ++k) {
+          for (int l = 0; l < out_height; ++l) {
+            this->result[l * out_width * out_channels + k * out_channels + j] = 0;
+          }
+        }
       }
     }
 
@@ -403,6 +415,7 @@ struct ConvWrapper {
       static const int AVERAGE_REP = 5;
       set();
       init();
+      result_zero();
       auto test_start = std::chrono::high_resolution_clock::now();
       run();
       auto test_end = std::chrono::high_resolution_clock::now();
@@ -480,33 +493,76 @@ void print_image(ConvWrapper a) {
 }
 
 
-bool check_correctness(ConvWrapper a) {
-  a.set();
-  a.init();
+bool check(ConvWrapper a, ConvWrapper b) {
   const int out_channels = a.out_channels;
   const int out_height = (a.in_size.height - a.filter_size.height + a.stride.height) / a.stride.height;
   const int out_width = (a.in_size.width - a.filter_size.width + a.stride.width) / a.stride.width;
   bool flag = true;
-  ConvWrapper b = a;
-  b.ct = CONV_TYPE_LOOP1_SIMD;
-//  print_image(a);
-//  print_image(b);
-//  print_kernel(a);
-//  print_kernel(b);
   a.run();
   b.run();
   for (int j = 0; j < out_channels; ++j) {
     for (int k = 0; k < out_width; ++k) {
       for (int l = 0; l < out_height; ++l) {
-        if (std::abs(a.result[l * out_width * out_channels + k * out_channels + j] - b.result[l * out_width * out_channels + k * out_channels + j]) > 1) {
+        if (std::abs(a.result[l * out_width * out_channels + k * out_channels + j] - b.result[l * out_width * out_channels + k * out_channels + j]) > 0.1) {
           flag = false;
         }
       }
     }
   }
-//  print_result(a, out_channels, out_width, out_height);
-//  print_result(b, out_channels, out_width, out_height);
   return flag;
+}
+
+void check_correctness(int size, int in_channels, int kernel_size, int out_channels) {
+  ConvWrapper a;
+  a.ct = CONV_TYPE_IM2COL_F32;
+  a.in_size = MinSize(size, size);
+  a.in_channels = in_channels;
+  a.filter_size = MinSize(kernel_size, kernel_size);
+  a.filters_count = out_channels;
+  a.set();
+  a.init();
+  a.result_zero();
+  ConvWrapper b = a;
+  ConvWrapper loop1 = a;
+  ConvWrapper loop2 = a;
+  ConvWrapper loop3 = a;
+  ConvWrapper tiling_loop1 = a;
+  ConvWrapper tiling_loop2 = a;
+  ConvWrapper tiling_loop3 = a;
+  ConvWrapper loop1_simd = a;
+  ConvWrapper loop2_simd = a;
+  ConvWrapper loop3_simd = a;
+  ConvWrapper tl1_simd = a;
+  ConvWrapper tl2_simd = a;
+  ConvWrapper tl3_simd = a;
+  b.ct = CONV_TYPE_IM2COL_PARTED_F32;
+  loop1.ct = CONV_TYPE_LOOP1;
+  loop2.ct = CONV_TYPE_LOOP2;
+  loop3.ct = CONV_TYPE_LOOP3;
+  tiling_loop1.ct = CONV_TYPE_TILING_LOOP1;
+  tiling_loop2.ct = CONV_TYPE_TILING_LOOP2;
+  tiling_loop3.ct = CONV_TYPE_TILING_LOOP3;
+  loop1_simd.ct = CONV_TYPE_LOOP1_SIMD;
+  loop2_simd.ct = CONV_TYPE_LOOP2_SIMD;
+  loop3_simd.ct = CONV_TYPE_LOOP3_SIMD;
+  tl1_simd.ct = CONV_TYPE_TILING_LOOP1_SIMD;
+  tl2_simd.ct = CONV_TYPE_TILING_LOOP2_SIMD;
+  tl3_simd.ct = CONV_TYPE_TILING_LOOP3_SIMD;
+
+  std::cout << "Cравнение происходим с im2col:\n";
+  std::cout << "CONV_TYPE_IM2COL_PARTED_F32: " <<  check(a, b) << std::endl;
+  std::cout << "CONV_TYPE_LOOP1: " << check(a, loop1) << std::endl;
+  std::cout << "CONV_TYPE_LOOP2: " << check(a, loop1) << std::endl;
+  std::cout << "CONV_TYPE_LOOP3: " << check(a, loop2) << std::endl;
+  std::cout << "CONV_TYPE_TILING_LOOP1: " << check(a, tiling_loop1) << std::endl;
+  std::cout << "CONV_TYPE_TILING_LOOP2: " << check(a, tiling_loop2) << std::endl;
+  std::cout << "CONV_TYPE_TILING_LOOP3: " << check(a, tiling_loop3) << std::endl;
+  std::cout << "CONV_TYPE_LOOP1_SIMD: " << check(a, loop1_simd) << std::endl;
+  std::cout << "CONV_TYPE_LOOP2_SIMD: " << check(a, loop2_simd) << std::endl;
+  std::cout << "CONV_TYPE_LOOP3_SIMD: " << check(a, loop3_simd) << std::endl;
+  std::cout << "CONV_TYPE_TILING_LOOP1_SIMD: " << check(a, tl1_simd) << std::endl;
+  std::cout << "CONV_TYPE_TILING_LOOP2_SIMD: " << check(a, tl2_simd) << std::endl;
+  std::cout << "CONV_TYPE_TILING_LOOP3_SIMD: " << check(a, tl3_simd) << std::endl;
 }
 
 
@@ -589,10 +645,10 @@ void run_time_test_f32(int cycles) {
   int n_runs;
 
   for (int c = 0; c < cycles; ++c) {
-    for (int kernel_size: {3, 5}) {
-      for (int size: {50, 70, 100, 20}) {
-        for (int in_channels: {4, 8}) {
-          for (int out_channels: {8, 16}) {
+    for (int kernel_size: {3}) {
+      for (int size: {50, 70, 100, 200, 256, 512}) {
+        for (int in_channels: {8, 16, 32, 64, 128, 256}) {
+          for (int out_channels: {8, 16, 32, 64, 128, 256}) {
             std::cout << "TESTING convolution of " << size << "x" << size << "x" << in_channels << " image with "
                       << kernel_size << "x" << kernel_size << "x" << in_channels << "x" << out_channels << " kernel"
                       << std::endl;
@@ -631,6 +687,7 @@ void run_time_test_f32(int cycles) {
             tl2_simd.ct = CONV_TYPE_TILING_LOOP2_SIMD;
             tl3_simd.ct = CONV_TYPE_TILING_LOOP3_SIMD;
 
+            //check_correctness(size, in_channels, kernel_size, out_channels);
 
             loop1.measure(time, error, total_time, n_runs, one_test_time * 5);
             report(loop1, time, error, total_time, n_runs);
@@ -676,12 +733,12 @@ void run_time_test_f32(int cycles) {
 
 
 
+
             for (int p = 120; p < 121; p += 8) {
               b.parted_rows = p;
               b.measure(time, error, total_time, n_runs, one_test_time);
               report(b, time, error, total_time, n_runs);
             }
-
           }
         }
       }
