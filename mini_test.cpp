@@ -257,6 +257,12 @@ enum ConvType {
     CONV_TYPE_TILING_LOOP1_SIMD = 13,
     CONV_TYPE_TILING_LOOP2_SIMD = 14,
     CONV_TYPE_TILING_LOOP3_SIMD = 15,
+    CONV_TYPE_TILING_LOOP1_CHANNELS = 16,
+    CONV_TYPE_TILING_LOOP1_WIDTH = 17,
+    CONV_TYPE_TILING_LOOP2_WIDTH = 18,
+    CONV_TYPE_TILING_LOOP2_HEIGHT = 19,
+    CONV_TYPE_TILING_LOOP3_CHANNELS = 20,
+    CONV_TYPE_TILING_LOOP3_WIDTH = 21,
 };
 
 
@@ -307,9 +313,9 @@ struct ConvWrapper {
     void init();
 
     void run() {
-      int tile_size_input_channels = 8;
-      int tile_size_out_width = 20;
-      int tile_size_out_height = 20;
+      int tile_size_input_channels = 16;
+      int tile_size_out_width = 32;
+      int tile_size_out_height = 32;
       switch (ct) {
         case CONV_TYPE_NONE:
           break;
@@ -395,6 +401,43 @@ struct ConvWrapper {
                         in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
                         filter_size.height, filter_size.width, tile_size_input_channels, tile_size_out_width);
           break;
+
+        case CONV_TYPE_TILING_LOOP1_CHANNELS:
+          loop_order_n1_tiled_channels(result.data(), input_image.data(), matrix.data(),
+                                       in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
+                                       filter_size.height, filter_size.width, tile_size_input_channels);
+          break;
+
+        case CONV_TYPE_TILING_LOOP1_WIDTH:
+          loop_order_n1_tiled_width(result.data(), input_image.data(), matrix.data(),
+                                    in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
+                                    filter_size.height, filter_size.width, tile_size_out_width);
+          break;
+
+        case CONV_TYPE_TILING_LOOP2_WIDTH:
+          loop_order_n2_tiled_width(result.data(), input_image.data(), matrix.data(),
+                                    in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
+                                    filter_size.height, filter_size.width, tile_size_out_width);
+          break;
+
+        case CONV_TYPE_TILING_LOOP2_HEIGHT:
+          loop_order_n2_tiled_height(result.data(), input_image.data(), matrix.data(),
+                                     in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
+                                     filter_size.height, filter_size.width, tile_size_out_height);
+          break;
+
+        case CONV_TYPE_TILING_LOOP3_CHANNELS:
+          loop_order_n3_tiled_channels(result.data(), input_image.data(), matrix.data(),
+                                       in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
+                                       filter_size.height, filter_size.width, tile_size_input_channels);
+          break;
+
+        case CONV_TYPE_TILING_LOOP3_WIDTH:
+          loop_order_n3_tiled_width(result.data(), input_image.data(), matrix.data(),
+                                    in_size.height, in_size.width, in_channels, stride.height, stride.width, out_channels,
+                                    filter_size.height, filter_size.width, tile_size_out_width);
+          break;
+
       }
     }
 
@@ -630,6 +673,31 @@ MUSTINLINE void report(const ConvWrapper &cw, double time, double error, double 
     case CONV_TYPE_TILING_LOOP3_SIMD:
       std::cout << "\ttiling_loop_order_3_simd\t";
       break;
+
+    case CONV_TYPE_TILING_LOOP1_CHANNELS:
+      std::cout << "\ttiling_loop_order_1_chan\t";
+      break;
+
+    case CONV_TYPE_TILING_LOOP1_WIDTH:
+      std::cout << "\ttiling_loop_order_1_width\t";
+      break;
+
+    case CONV_TYPE_TILING_LOOP3_CHANNELS:
+      std::cout << "\ttiling_loop_order_3_chan\t";
+      break;
+
+    case CONV_TYPE_TILING_LOOP3_WIDTH:
+      std::cout << "\ttiling_loop_order_3_width\t";
+      break;
+
+    case CONV_TYPE_TILING_LOOP2_HEIGHT:
+      std::cout << "\ttiling_loop_order_1_height\t";
+      break;
+
+    case CONV_TYPE_TILING_LOOP2_WIDTH:
+      std::cout << "\ttiling_loop_order_2_width\t";
+      break;
+
     default:
       std::cout << "unknown_type:\t\t";
       break;
@@ -646,9 +714,9 @@ void run_time_test_f32(int cycles) {
 
   for (int c = 0; c < cycles; ++c) {
     for (int kernel_size: {3}) {
-      for (int size: {50, 70, 100, 200, 256, 512}) {
-        for (int in_channels: {8, 16, 32, 64, 128, 256}) {
-          for (int out_channels: {8, 16, 32, 64, 128, 256}) {
+      for (int size: {30}) {
+        for (int in_channels: {8}) {
+          for (int out_channels: {8}) {
             std::cout << "TESTING convolution of " << size << "x" << size << "x" << in_channels << " image with "
                       << kernel_size << "x" << kernel_size << "x" << in_channels << "x" << out_channels << " kernel"
                       << std::endl;
@@ -672,6 +740,12 @@ void run_time_test_f32(int cycles) {
             ConvWrapper tl1_simd = a;
             ConvWrapper tl2_simd = a;
             ConvWrapper tl3_simd = a;
+            ConvWrapper tl1_channels = a;
+            ConvWrapper tl1_width = a;
+            ConvWrapper tl2_height = a;
+            ConvWrapper tl2_width = a;
+            ConvWrapper tl3_channels = a;
+            ConvWrapper tl3_width = a;
             c.ct = CONV_TYPE_ANDERSON_F32;
             b.ct = CONV_TYPE_IM2COL_PARTED_F32;
             loop1.ct = CONV_TYPE_LOOP1;
@@ -686,17 +760,53 @@ void run_time_test_f32(int cycles) {
             tl1_simd.ct = CONV_TYPE_TILING_LOOP1_SIMD;
             tl2_simd.ct = CONV_TYPE_TILING_LOOP2_SIMD;
             tl3_simd.ct = CONV_TYPE_TILING_LOOP3_SIMD;
+            tl1_channels.ct = CONV_TYPE_TILING_LOOP1_CHANNELS;
+            tl1_width.ct = CONV_TYPE_TILING_LOOP1_WIDTH;
+            tl2_width.ct = CONV_TYPE_TILING_LOOP2_WIDTH;
+            tl2_height.ct = CONV_TYPE_TILING_LOOP2_HEIGHT;
+            tl3_channels.ct = CONV_TYPE_TILING_LOOP3_CHANNELS;
+            tl3_width.ct = CONV_TYPE_TILING_LOOP3_WIDTH;
 
             //check_correctness(size, in_channels, kernel_size, out_channels);
 
             loop1.measure(time, error, total_time, n_runs, one_test_time * 5);
             report(loop1, time, error, total_time, n_runs);
 
+//            tl1_channels.measure(time, error, total_time, n_runs, one_test_time * 5);
+//            report(tl1_channels, time, error, total_time, n_runs);
+//
+//            tl1_width.measure(time, error, total_time, n_runs, one_test_time * 5);
+//            report(tl1_width, time, error, total_time, n_runs);
+
+
             loop2.measure(time, error, total_time, n_runs, one_test_time * 5);
             report(loop2, time, error, total_time, n_runs);
 
+
+
+//            tl2_width.measure(time, error, total_time, n_runs, one_test_time * 5);
+//            report(tl2_width, time, error, total_time, n_runs);
+//
+//            tl2_height.measure(time, error, total_time, n_runs, one_test_time * 5);
+//            report(tl2_height, time, error, total_time, n_runs);
+
             loop3.measure(time, error, total_time, n_runs, one_test_time * 5);
             report(loop3, time, error, total_time, n_runs);
+
+            tiling_loop1.measure(time, error, total_time, n_runs, one_test_time * 5);
+            report(tiling_loop1, time, error, total_time, n_runs);
+
+            tiling_loop2.measure(time, error, total_time, n_runs, one_test_time * 5);
+            report(tiling_loop2, time, error, total_time, n_runs);
+
+            tiling_loop3.measure(time, error, total_time, n_runs, one_test_time * 5);
+            report(tiling_loop3, time, error, total_time, n_runs);
+
+//            tl3_channels.measure(time, error, total_time, n_runs, one_test_time * 5);
+//            report(tl3_channels, time, error, total_time, n_runs);
+//
+//            tl3_width.measure(time, error, total_time, n_runs, one_test_time * 5);
+//            report(tl3_width, time, error, total_time, n_runs);
 
             loop1_simd.measure(time, error, total_time, n_runs, one_test_time * 5);
             report(loop1_simd, time, error, total_time, n_runs);
@@ -707,14 +817,6 @@ void run_time_test_f32(int cycles) {
             loop3_simd.measure(time, error, total_time, n_runs, one_test_time * 5);
             report(loop3_simd, time, error, total_time, n_runs);
 
-            tiling_loop1.measure(time, error, total_time, n_runs, one_test_time * 5);
-            report(tiling_loop1, time, error, total_time, n_runs);
-
-            tiling_loop2.measure(time, error, total_time, n_runs, one_test_time * 5);
-            report(tiling_loop2, time, error, total_time, n_runs);
-
-            tiling_loop3.measure(time, error, total_time, n_runs, one_test_time * 5);
-            report(tiling_loop3, time, error, total_time, n_runs);
 
             tl1_simd.measure(time, error, total_time, n_runs, one_test_time * 5);
             report(tl1_simd, time, error, total_time, n_runs);
@@ -732,13 +834,12 @@ void run_time_test_f32(int cycles) {
             report(c, time, error, total_time, n_runs);
 
 
-
-
             for (int p = 120; p < 121; p += 8) {
               b.parted_rows = p;
               b.measure(time, error, total_time, n_runs, one_test_time);
               report(b, time, error, total_time, n_runs);
             }
+
           }
         }
       }
