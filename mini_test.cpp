@@ -313,7 +313,7 @@ struct ConvWrapper {
     void init();
 
     void run() {
-      int tile_size_input_channels = 16;
+      int tile_size_input_channels = 8;
       int tile_size_out_width = 32;
       int tile_size_out_height = 32;
       switch (ct) {
@@ -691,7 +691,7 @@ MUSTINLINE void report(const ConvWrapper &cw, double time, double error, double 
       break;
 
     case CONV_TYPE_TILING_LOOP2_HEIGHT:
-      std::cout << "\ttiling_loop_order_1_height\t";
+      std::cout << "\ttiling_loop_order_2_height\t";
       break;
 
     case CONV_TYPE_TILING_LOOP2_WIDTH:
@@ -713,10 +713,10 @@ void run_time_test_f32(int cycles) {
   int n_runs;
 
   for (int c = 0; c < cycles; ++c) {
-    for (int kernel_size: {3}) {
-      for (int size: {30}) {
-        for (int in_channels: {8}) {
-          for (int out_channels: {8}) {
+    for (int kernel_size: {5}) {
+      for (int size: {5, 10, 15, 20, 30}) {
+        for (int in_channels: {512, 128, 256, 512, 1024}) {
+          for (int out_channels: {1024, 128, 256, 512, 1024}) {
             std::cout << "TESTING convolution of " << size << "x" << size << "x" << in_channels << " image with "
                       << kernel_size << "x" << kernel_size << "x" << in_channels << "x" << out_channels << " kernel"
                       << std::endl;
@@ -769,39 +769,36 @@ void run_time_test_f32(int cycles) {
 
             //check_correctness(size, in_channels, kernel_size, out_channels);
 
-            loop1.measure(time, error, total_time, n_runs, one_test_time * 5);
-            report(loop1, time, error, total_time, n_runs);
-
+//            loop1.measure(time, error, total_time, n_runs, one_test_time * 5);
+//            report(loop1, time, error, total_time, n_runs);
+//
+//            tiling_loop1.measure(time, error, total_time, n_runs, one_test_time * 5);
+//            report(tiling_loop1, time, error, total_time, n_runs);
+//
 //            tl1_channels.measure(time, error, total_time, n_runs, one_test_time * 5);
 //            report(tl1_channels, time, error, total_time, n_runs);
 //
 //            tl1_width.measure(time, error, total_time, n_runs, one_test_time * 5);
 //            report(tl1_width, time, error, total_time, n_runs);
-
-
-            loop2.measure(time, error, total_time, n_runs, one_test_time * 5);
-            report(loop2, time, error, total_time, n_runs);
-
-
-
+//
+//            loop2.measure(time, error, total_time, n_runs, one_test_time * 5);
+//            report(loop2, time, error, total_time, n_runs);
+//
+//            tiling_loop2.measure(time, error, total_time, n_runs, one_test_time * 5);
+//            report(tiling_loop2, time, error, total_time, n_runs);
+//
 //            tl2_width.measure(time, error, total_time, n_runs, one_test_time * 5);
 //            report(tl2_width, time, error, total_time, n_runs);
 //
 //            tl2_height.measure(time, error, total_time, n_runs, one_test_time * 5);
 //            report(tl2_height, time, error, total_time, n_runs);
-
-            loop3.measure(time, error, total_time, n_runs, one_test_time * 5);
-            report(loop3, time, error, total_time, n_runs);
-
-            tiling_loop1.measure(time, error, total_time, n_runs, one_test_time * 5);
-            report(tiling_loop1, time, error, total_time, n_runs);
-
-            tiling_loop2.measure(time, error, total_time, n_runs, one_test_time * 5);
-            report(tiling_loop2, time, error, total_time, n_runs);
-
-            tiling_loop3.measure(time, error, total_time, n_runs, one_test_time * 5);
-            report(tiling_loop3, time, error, total_time, n_runs);
-
+//
+//            loop3.measure(time, error, total_time, n_runs, one_test_time * 5);
+//            report(loop3, time, error, total_time, n_runs);
+//
+//            tiling_loop3.measure(time, error, total_time, n_runs, one_test_time * 5);
+//            report(tiling_loop3, time, error, total_time, n_runs);
+//
 //            tl3_channels.measure(time, error, total_time, n_runs, one_test_time * 5);
 //            report(tl3_channels, time, error, total_time, n_runs);
 //
